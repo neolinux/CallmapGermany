@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#By Ulrich Thiel, VK2UTL/DK1UT
-#Reads calls.txt and creates calls.db
 
+# By Ulrich Thiel, VK2UTL/DK1UT
+# Reads calls.txt and creates calls.db
+
+
+##############################################################################
+# Imports
 import re
 import sqlite3
 import sys
 
-# Fixing characters
+##############################################################################
+# Fixing characters and umlauts, remove garbage
 def fix(str):
 	str = re.sub("u\"", "ü", str)
 	str = re.sub("o\"", "ö", str)
@@ -22,37 +27,88 @@ def fix(str):
 	str = re.sub("[1-6][\s]*Liste der.*Klubstation", "", str)
 	return str
 	
+##############################################################################
 # Fixing city names
 def fixCity(str):
 	#insert dash
 	pos = re.search("[a-z][A-Z]",str)
 	if pos == None:
-		return str
+		return str	
 	else:
 		pos = pos.start()
 		return str[0:pos+1]+"-"+str[pos+1:]
 
-calls = [] #will be the array of calls
-call = ""	#for reading lines
-incall = False
+##############################################################################
+# Main program
+
+# Read date from callbook
+callbookdate = ""
 with open('calls.txt') as f:
-	for line in f:						
-		#match call sign
-		if re.match("D[A-R]+[0-9]+[A-Z]+", line): #match call sign
+	for line in f:	
+		if line.find("Januar") != -1 or line.find("Februar") != -1 or line.find("März") != -1 or line.find("April") != -1 or line.find("Mai") != -1 or line.find("Juni") != -1 or line.find("Juli") != -1 or line.find("August") != -1 or line.find("September") != -1 or line.find("Oktober") != -1 or line.find("November") != -1 or line.find("Dezember") != -1:
+			line = re.sub("vom[ ]*", "", line)
+			callbookdate = line
+			break
+
+callbookdatesplit = callbookdate.split(" ")
+callbookmonth = ""
+if callbookdatesplit[1] == "Januar":
+	callbookmonth = "01."
+elif callbookdatesplit[1] == "Februar":
+	callbookmonth = "02."
+elif callbookdatesplit[1] == "März":
+	callbookmonth = "03."
+elif callbookdatesplit[1] == "April":
+	callbookmonth = "04."
+elif callbookdatesplit[1] == "Mai":
+	callbookmonth = "05."
+elif callbookdatesplit[1] == "Juni":
+	callbookmonth = "06."
+elif callbookdatesplit[1] == "Juli":
+	callbookmonth = "07."
+elif callbookdatesplit[1] == "August":
+	callbookmonth = "08."
+elif callbookdatesplit[1] == "September":
+	callbookmonth = "09."
+elif callbookdatesplit[1] == "Oktober":
+	callbookmonth = "10."
+elif callbookdatesplit[1] == "November":
+	callbookmonth = "11."
+elif callbookdatesplit[1] == "Dezember":
+	callbookmonth = "12."
+
+callbookdate = callbookdatesplit[0]+callbookmonth+callbookdatesplit[2]
+
+print "Callbook date: " + str(callbookdate)
+sys.exit(0)
+
+# Read file and extract call records
+calls = [] #will be the array of call records
+call = ""	#for reading lines
+with open('calls.txt') as f:
+	for line in f:		
+		
+		# start with fixing string
+		# form feed character at line beginning yields regexp failure for unknown reason (reported)
+		line = fix(line)
+		
+		#match call sign		
+		if re.match("D[A-R][0-9][A-Z]+", line): #match call sign
 			if call != "":
-				calls.append(fix(call))
+				calls.append(call)
 				call = ""
 			call = line
 		else:
-			if call != "":
-				call = call + line	
+			call = call + line	
 
-calls.append(fix(call)) #flush
+#flush
+calls.append(fix(call)) 
 
 #now process data
 dbconn = sqlite3.connect('calls.db')
 dbcursor = dbconn.cursor()	
 for call in calls:
+	#print call
 	fields = call.split(";")
 	callsign = fields[0].split(",")[0]
 	callclass = fields[0].split(",")[1]
