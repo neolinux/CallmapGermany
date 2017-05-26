@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 # By Ulrich Thiel, VK2UTL/DK1UT
 # Reads calls.txt and creates calls.db
@@ -44,7 +45,8 @@ def fixCity(str):
 # Read date from callbook
 callbookdate = ""
 with open('calls.txt') as f:
-	for line in f:	
+	for line in f:
+		line = unicode(line, 'utf-8')	
 		if line.find("Januar") != -1 or line.find("Februar") != -1 or line.find("März") != -1 or line.find("April") != -1 or line.find("Mai") != -1 or line.find("Juni") != -1 or line.find("Juli") != -1 or line.find("August") != -1 or line.find("September") != -1 or line.find("Oktober") != -1 or line.find("November") != -1 or line.find("Dezember") != -1:
 			line = re.sub("vom[ ]*", "", line)
 			callbookdate = line
@@ -78,9 +80,8 @@ elif callbookdatesplit[1] == "Dezember":
 	callbookmonth = "12."
 
 callbookdate = callbookdatesplit[0]+callbookmonth+callbookdatesplit[2]
-
+callbookdate = re.sub("\n", "", callbookdate)
 print "Callbook date: " + str(callbookdate)
-sys.exit(0)
 
 # Read file and extract call records
 calls = [] #will be the array of call records
@@ -90,6 +91,7 @@ with open('calls.txt') as f:
 		
 		# start with fixing string
 		# form feed character at line beginning yields regexp failure for unknown reason (reported)
+		line = unicode(line, 'utf-8')
 		line = fix(line)
 		
 		#match call sign		
@@ -105,10 +107,9 @@ with open('calls.txt') as f:
 calls.append(fix(call)) 
 
 #now process data
-dbconn = sqlite3.connect('calls.db')
-dbcursor = dbconn.cursor()	
+#this is not perfect but it works
+callsprocessed = []	
 for call in calls:
-	#print call
 	fields = call.split(";")
 	callsign = fields[0].split(",")[0]
 	callclass = fields[0].split(",")[1]
@@ -117,8 +118,8 @@ for call in calls:
 	name = re.sub("[\s]*$", "", name)
 	callclass = re.sub("^[\s]*", "", callclass)
 	if len(fields) == 1:	#no address given
-		dbcursor.execute("INSERT OR IGNORE INTO Callsigns (Callsign, Class, Name) VALUES (\"" + callsign + "\",\"" + callclass + "\",\"" + name + "\")")
-		None
+
+		callsprocessed.append({'Call': callsign, 'Class': callclass, 'Name': name, 'Street':None, 'Zip':None, 'City':None})
 	else:
 		if len(fields) == 3:	#one address given
 			street = fields[1]
@@ -130,7 +131,9 @@ for call in calls:
 			zip = city[0:5]
 			city = city[6:]
 			city = fixCity(city)
-			dbcursor.execute("INSERT OR IGNORE INTO Callsigns (Callsign, Class, Name, Street, Zip, City) VALUES (\"" + callsign + "\",\"" + callclass + "\",\"" + name + "\",\"" + street + "\",\"" + zip + "\",\"" + city + "\")")
+			
+			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Name': name, 'Street':street, 'Zip':zip, 'City':city})
+			
 		elif len(fields) == 4:	#two addresses given
 			street1 = fields[1]
 			street1 = re.sub("^[\s]*", "", street1)
@@ -152,8 +155,33 @@ for call in calls:
 			city2 = city2[6:]
 			city1 = fixCity(city1)
 			city2 = fixCity(city2)
-			dbcursor.execute("INSERT OR IGNORE INTO Callsigns (Callsign, Class, Name, Street, Zip, City) VALUES (\"" + callsign + "\",\"" + callclass + "\",\"" + name + "\",\"" + street1 + "\",\"" + zip1 + "\",\"" + city1 + "\")")
-			dbcursor.execute("INSERT OR IGNORE INTO Callsigns (Callsign, Class, Name, Street, Zip, City) VALUES (\"" + callsign + "\",\"" + callclass + "\",\"" + name + "\",\"" + street2 + "\",\"" + zip2 + "\",\"" + city2 + "\")")
-			
+
+			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Name': name, 'Street':street1, 'Zip':zip1, 'City':city1})
+			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Name': name, 'Street':street2, 'Zip':zip2, 'City':city2})
+	
+print "Records: " + str(len(callsprocessed))
+
+#now, add data to database (intelligently)
+dbconn = sqlite3.connect('calls.db')
+dbcursor = dbconn.cursor()
+
+#create temporary table
+dbcursor.execute("DROP TABLE IF EXISTS CallsignsTmp")
+dbcursor.execute("CREATE TABLE CallsignsTmp AS SELECT * FROM Callsigns WHERE 0")
+for call in callsprocessed:
+	columns = ', '.join(call.keys())
+	placeholders = ', '.join('?' * len(call))
+	sql = 'INSERT INTO CallsignsTmp ({}) VALUES ({})'.format(columns, placeholders)
+	dbcursor.execute(sql, call.values())
+
+#update table
+#what we actually want to do here is to update the db intelligently and keep history if changes. this in not implemented yet.
+for call in callsprocessed:
+	call['Date'] = callbookdate
+	columns = ', '.join(call.keys())
+	placeholders = ', '.join('?' * len(call))
+	sql = 'INSERT INTO Callsigns ({}) VALUES ({})'.format(columns, placeholders)
+	dbcursor.execute(sql, call.values())
+				
 dbconn.commit()
 dbconn.close()
