@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 # By Ulrich Thiel, VK2UTL/DK1UT
 import sys  
 import sqlite3
@@ -9,12 +11,16 @@ from sets import Set
 reload(sys)  
 sys.setdefaultencoding('utf8')
 
-
 dbconn = sqlite3.connect('calls.db')
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+dbconn.row_factory = dict_factory
 dbcursor = dbconn.cursor()
 
-#there are overlap locations so we proceed differently than in earlier versions
-dbcursor.execute("SELECT Lng, Lat FROM Callsigns WHERE Geocode =1 GROUP BY Lat, Lng")
+dbcursor.execute("SELECT Lng, Lat FROM Locations WHERE Geocode = 1")
 res = dbcursor.fetchall()
 
 counter = 0
@@ -25,9 +31,9 @@ with open('calls.csv', 'w') as csvfile:
     writer.writeheader()
     
     for row in res:
-    	lng = row[0]
-    	lat = row[1]
-    	dbcursor.execute("SELECT Id, Callsign, Class, Name, Street, Zip, City, Lng, Lat FROM Callsigns WHERE Lat="+str(lat)+" AND Lng= "+str(lng))
+    	lng = row['Lng']
+    	lat = row['Lat']
+    	dbcursor.execute("SELECT Call, Class, Name, Street, Zip, City, Lng, Lat FROM CallsComplete WHERE Lat="+str(lat)+" AND Lng= "+str(lng))
     	res = dbcursor.fetchall()
     	label = "<div class='googft-info-window'>"
     	classes = Set([])
@@ -35,9 +41,9 @@ with open('calls.csv', 'w') as csvfile:
     	for i in range(0,len(res)):
     		counter = counter + 1
     		current = res[i]
-    		classes.add(current[2])
-    		label = label + "<b>"+current[1]+" ("+current[3]+")</b><br>"
-    		label = label + current[4] + ", " + current[5] + " " + current[6]
+    		classes.add(current['Class'])
+    		label = label + "<b>"+current['Call']+" ("+current['Name']+")</b><br>"
+    		label = label + current['Street'] + ", " + current['Zip'] + " " + current['City']
     		if i < len(res)-1:
     			label = label + "<br><br>"
     		
