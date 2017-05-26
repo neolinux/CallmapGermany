@@ -182,6 +182,10 @@ for call in callsprocessed:
 	placeholders = ', '.join('?' * len(call))
 	sql = 'INSERT INTO Callsigns ({}) VALUES ({})'.format(columns, placeholders)
 	dbcursor.execute(sql, call.values())
+	
+#cleanup
+dbcursor.execute("DROP TABLE CallsignsTmp")
+dbcursor.execute("VACUUM")
 				
 dbconn.commit()
 dbconn.close()
