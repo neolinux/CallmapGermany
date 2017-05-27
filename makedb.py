@@ -11,6 +11,8 @@ from __future__ import unicode_literals
 import re
 import sqlite3
 import sys
+reload(sys)  
+sys.setdefaultencoding('utf8')
 
 ##############################################################################
 # Fixing characters and umlauts, remove garbage
@@ -30,7 +32,7 @@ def fix(str):
 	
 ##############################################################################
 # Fixing city names
-def fixCity(str):
+def fixDash(str):
 	#insert dash
 	pos = re.search("[a-z][A-Z]",str)
 	if pos == None:
@@ -41,6 +43,11 @@ def fixCity(str):
 
 ##############################################################################
 # Main program
+
+logfile = open('errors.txt','w')
+logfile.write("")
+logfile.close()
+logfile = open('errors.txt','a+')
 
 # Read date from callbook
 callbookdate = None
@@ -114,6 +121,7 @@ calls.append(fix(call))
 #now process data
 #this is not perfect but it works
 callsprocessed = []	
+numerrors = 0
 for call in calls:
 	fields = call.split(";")
 	callsign = fields[0].split(",")[0]
@@ -122,6 +130,7 @@ for call in calls:
 	name = re.sub("^[\s]*", "", name)
 	name = re.sub("[\s]*$", "", name)
 	callclass = re.sub("^[\s]*", "", callclass)
+		
 	if len(fields) == 1:	#no address given
 
 		callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':None, 'Zip':None, 'City':None, 'Date':callbookdate})
@@ -136,11 +145,17 @@ for call in calls:
 			city = re.sub("[\s]*$", "", city)
 			zip = city[0:5]
 			city = city[6:]
-			city = fixCity(city)
+			city = fixDash(city)
+			street = fixDash(street)
 			
-			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street, 'Zip':zip, 'City':city, 'Date':callbookdate})
+			#there are some errors in the callbook, catch these
+			if not re.match("[0-9]{5}", zip):
+				numerrors = numerrors + 1
+				logfile.write(callsign+"\n")
+			else:		
+				callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street, 'Zip':zip, 'City':city, 'Date':callbookdate})
 			
-		elif len(fields) == 4:	#two addresses given
+		elif len(fields) == 4:	#two addresses given	
 			street1 = fields[1]
 			street1 = re.sub("^[\s]*", "", street1)
 			street1 = re.sub("[\s]*$", "", street1)
@@ -150,6 +165,7 @@ for call in calls:
 			street1 = re.sub("^[\s]*", "", street1)
 			street1 = re.sub("[\s]*$", "", street1)
 			street1 = re.sub(r"(\w)([A-Z])", r"\1-\2", street1) #by salat
+			street1 = fixDash(street1)
 			city1 = re.sub("^[\s]*", "", city1)
 			city1 = re.sub("[\s]*$", "", city1)
 			zip1 = city1[0:5]
@@ -157,17 +173,32 @@ for call in calls:
 			street2 = re.sub("^[\s]*", "", street2)
 			street2 = re.sub("[\s]*$", "", street2)
 			street2 = re.sub(r"(\w)([A-Z])", r"\1-\2", street2)	#by salat
+			street2 = fixDash(street2)
 			city2 = re.sub("^[\s]*", "", city2)
 			city2 = re.sub("[\s]*$", "", city2)
 			zip2 = city2[0:5]
 			city2 = city2[6:]
-			city1 = fixCity(city1)
-			city2 = fixCity(city2)
+			city1 = fixDash(city1)
+			city2 = fixDash(city2)
+			
+			#there are some errors in the callbook, catch these
+			if not re.match("[0-9]{5}", zip1):
+				numerrors = numerrors + 1
+				logfile.write(callsign+"\n")
+			else:
+				callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street1, 'Zip':zip1, 'City':city1, 'Date':callbookdate})
+			
+			#there are some errors in the callbook, catch these
+			if not re.match("[0-9]{5}", zip2):
+				numerrors = numerrors + 1
+				logfile.write(callsign+"\n")
+			else:
+				callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street2, 'Zip':zip2, 'City':city2, 'Date':callbookdate})
+			
 
-			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street1, 'Zip':zip1, 'City':city1, 'Date':callbookdate})
-			callsprocessed.append({'Call': callsign, 'Class': callclass, 'Category':None, 'Name': name, 'Street':street2, 'Zip':zip2, 'City':city2, 'Date':callbookdate})
 	
 print "Records: " + str(len(callsprocessed))
+print "Parsing errors: " + str(numerrors) + " (see log.txt)"
 
 #now, add data to database 
 dbconn = sqlite3.connect('calls.db')
@@ -183,7 +214,7 @@ dbcursor = dbconn.cursor()
 #first, add locations
 for call in callsprocessed:
 	if call['Street'] == None:
-		continue
+		continue	
 	location = {'Street':call['Street'], 'Zip':call['Zip'], 'City':call['City']}
 	columns = ', '.join(location)
 	placeholders = ', '.join('?' * len(location))

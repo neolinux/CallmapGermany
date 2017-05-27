@@ -11,6 +11,8 @@ import sqlite3
 import geocoder
 import requests
 import sys
+reload(sys)  
+sys.setdefaultencoding('utf8')
 import time
 from tqdm import tqdm
 

@@ -3,11 +3,10 @@
 from __future__ import unicode_literals
 
 # By Ulrich Thiel, VK2UTL/DK1UT
-import sys  
 import sqlite3
 import csv
 from sets import Set
-
+import sys  
 reload(sys)  
 sys.setdefaultencoding('utf8')
 
